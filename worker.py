@@ -8,7 +8,6 @@ import json     #for sending and receiving objects
 
 processedRequestsCount = 0
 masterKey = -1
-
 def main():
 	#init
 	processedRequestsCount = 0
@@ -24,17 +23,22 @@ def main():
 		workerSocket.listen(1)
 		(masterSocket, address) = workerSocket.accept()
 		#start processing it
-		if(processRequest(masterSocket) == -1):
-			#received shutdown flag
-			print(str(workerPort) + ":Master node requested for shutdown. bye")
+		try:
+			if(processRequest(masterSocket,workerPort) == -1):
+				#received shutdown flag
+				print(str(workerPort) + ":Master node requested for shutdown. bye")
+				workerSocket.close()
+				break
+			else:
+				processedRequestsCount += 1
+
+		except KeyboardInterrupt:
+			print("KeyboardInterrupt. Shutting worker down.")
 			workerSocket.close()
 			break
-		else:
-			processedRequestsCount += 1
-			#print("Processed one request from master. " + str(processedRequestsCount) + " so far.")
 	return
 
-def processRequest(masterSocket):
+def processRequest(masterSocket,workerPort):
 	#data_string = json.dumps(data) #data serialized
 	#data_loaded = json.loads(data) #data loaded
 	#receive data
@@ -44,24 +48,33 @@ def processRequest(masterSocket):
 		#if end of transmition
 		if not dataChunk: break
 		#concatenate data to buffer
+		print(len(dataChunk))
 		receivedDataBuffer += dataChunk
-	#closing socket
-	masterSocket.close()
-
+	
 	#processing request
 	receivedDict = json.loads(receivedDataBuffer)
 
+	returnVal = 0
+	
 	#error prevention
 	if(not receivedDict):
 		print(str(workerPort) + ":Error. Received object is " + type(receivedDict))
-		return 0
 	else:
+		#Processing the data
+		
 		#shutdown signal
 		if(receivedDict["Action"] == "SHUTDOWN"):
-			return -1
+			returnVal = -1
+			masterSocket.sendall(str(workerPort) + ": Shutting down.")
+		
 		if(receivedDict["Action"] == "PING"):
-			print(str(workerPort) + ":" + receivedDict["Data"])
-	return 1
+			print(str(workerPort) + ": " + receivedDict["Data"])
+			masterSocket.sendall(str(workerPort) + ": Pong.")
+			returnVal = 1
+	#closing socket
+	masterSocket.close()
+	
+	return returnVal
 
 #returns the worker port from the given argument
 def getWorkerPort():

@@ -14,7 +14,11 @@ def main():
 	Workers = getWorkers()
 
 	while 1:
-		inputData = int(raw_input("0:ping, 1:kill, 2:exit ->"))
+		try:
+			inputData = int(raw_input("0:ping, 1:kill, 2:exit ->"))
+		except KeyboardInterrupt:
+			print("\nShutting master node down.")
+			break
 		
 		if(inputData == 0):
 			for Worker in Workers:
@@ -23,6 +27,7 @@ def main():
 			for Worker in Workers:
 				killWorker(Worker)
 		elif(inputData == 2):
+			print("Shutting master node down.")
 			break
 
 	#print(response)
@@ -47,15 +52,17 @@ def getWorkers():
 	return workersList
 
 def pingWorker(Worker):
-	#aloca objeto
-	sendRequest(Worker, "PING", 1010, '', '', 'Testing.')
+	#doing request
+	print("Pinging worker: " + str(Worker))
+	sendRequest(Worker, "PING", 1010, '', '', 'Testing.',True)
 
 def killWorker(Worker):
-	#aloca objeto
+	#doing request
+	print("Killing worker: " + str(Worker))
 	sendRequest(Worker, "SHUTDOWN", 1010, '', '', 'Testing.')
 
 
-def sendRequest(Worker, Action, Source, Field1, Field2, Data):
+def sendRequest(Worker, Action, Source, Field1, Field2, Data, waitResponse=False):
 	requestDict = newRequestDict(Action, Source, Field1, Field2, Data)
 	#encapsula
 	sendingData = json.dumps(requestDict)
@@ -63,6 +70,9 @@ def sendRequest(Worker, Action, Source, Field1, Field2, Data):
 	#opening socket
 	workerSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
+	#Setting timeout
+	workerSocket.settimeout(5)
+	
 	#trying to connect
 	try:
 		workerSocket.connect(('localhost', Worker))
@@ -71,11 +81,24 @@ def sendRequest(Worker, Action, Source, Field1, Field2, Data):
 		return
 	
 	#send data
-	workerSocket.send(sendingData)
-	
-	#data = workerSocket.recv(BUFFER_SIZE)
-	
+	workerSocket.sendall(sendingData)
+
+	receivedDataBuffer = ""
+	#waiting for response if necessary
+	if(waitResponse):
+		try:
+			#receive all data
+			while 1:
+				dataChunk = workerSocket.recv(1024)
+				if not dataChunk: break
+				print(dataChunk)
+				receivedDataBuffer += dataChunk
+		except socket.timeout:
+			print("Worker \'" + str(Worker) + "\' did not respond after 5 seconds.")
+
+	#closing socket
 	workerSocket.close()
+
 
 
 def newRequestDict(Action, Source, Field1, Field2, Data):
