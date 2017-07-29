@@ -1,114 +1,115 @@
-#worker-script
-import os,sys   #system related task
+"""A script that send requests from the user to the workers on the network"""
+import sys      #system related task
 import socket   #for socket communication
-
-import socket   #for network communication
-import cPickle  #for sending and receiving objects
 import json     #for sending and receiving objects
-
-
 import csv
 
 def main():
-	#get list of workers
-	Workers = getWorkers()
+    """Main function of the code"""
+    #get list of workers
+    workers = get_workers()
 
-	while 1:
-		try:
-			inputData = int(raw_input("0:ping, 1:kill, 2:exit ->"))
-		except KeyboardInterrupt:
-			print("\nShutting master node down.")
-			break
-		
-		if(inputData == 0):
-			for Worker in Workers:
-				pingWorker(Worker)
-		elif(inputData == 1):
-			for Worker in Workers:
-				killWorker(Worker)
-		elif(inputData == 2):
-			print("Shutting master node down.")
-			break
+    while 1:
+        try:
+            input_data = int(input("0:ping, 1:kill, 2:exit ->"))
+        except KeyboardInterrupt:
+            print("\nShutting master node down.")
+            break
+        except TypeError:
+            print("\nPlease, enter a valid option.")
 
-	#print(response)
+        if input_data == 0:
+            for worker in workers:
+                ping_worker(worker)
+        elif input_data == 1:
+            for worker in workers:
+                kill_worker(worker)
+        elif input_data == 2:
+            print("Shutting master node down.")
+            break
 
-
-#returns a list with the ports the workers are using !!CHANGE THIS IF IN PRODUCTION
-def getWorkers():
-	#Checking argument
-	if(len(sys.argv) != 2):
-		print("Missing filename.\nUsage:\t$" + sys.argv[0]+" <filename>")
-		exit(-1)
-	#Opening file
-	with open(sys.argv[1], 'rb') as csvfile:
-		#reading content
-		spamreader = csv.reader(csvfile, delimiter=',')
-		workersList = []
-		#saving to list
-		for row in spamreader:
-			for val in row:
-				workersList.append(int(val))
-	#returning it
-	return workersList
-
-def pingWorker(Worker):
-	#doing request
-	print("Pinging worker: " + str(Worker))
-	sendRequest(Worker, "PING", 1010, '', '', 'Testing.',True)
-
-def killWorker(Worker):
-	#doing request
-	print("Killing worker: " + str(Worker))
-	sendRequest(Worker, "SHUTDOWN", 1010, '', '', 'Testing.')
+    #print(response)
 
 
-def sendRequest(Worker, Action, Source, Field1, Field2, Data, waitResponse=False):
-	requestDict = newRequestDict(Action, Source, Field1, Field2, Data)
-	#encapsula
-	sendingData = json.dumps(requestDict)
+def get_workers():
+    """Returns a list with all the ports located in the .csv file passed as argument"""
+    #Checking argument
+    if len(sys.argv) != 2:
+        print("Missing filename.\nUsage:\t$" + sys.argv[0]+" <filename>")
+        exit(-1)
+    #Opening file
+    with open(sys.argv[1], 'rb') as csvfile:
+        #reading content
+        spamreader = csv.reader(csvfile, delimiter=',')
+        workers_list = []
+        #saving to list
+        for row in spamreader:
+            for val in row:
+                workers_list.append(int(val))
+    #returning it
+    return workers_list
 
-	#opening socket
-	workerSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+def ping_worker(worker):
+    """pings a worker"""
+    print("Pinging worker: " + str(worker))
+    send_request(worker, new_request_dict("PING", 1010, '', '', 'Testing.'), True)
 
-	#Setting timeout
-	workerSocket.settimeout(5)
-	
-	#trying to connect
-	try:
-		workerSocket.connect(('localhost', Worker))
-	except Exception as e:
-		print("Failed to connect to worker on port: "+str(Worker))
-		return
-	
-	#send data
-	workerSocket.sendall(sendingData)
-
-	receivedDataBuffer = ""
-	#waiting for response if necessary
-	if(waitResponse):
-		try:
-			#receive all data
-			while 1:
-				dataChunk = workerSocket.recv(1024)
-				if not dataChunk: break
-				print(dataChunk)
-				receivedDataBuffer += dataChunk
-		except socket.timeout:
-			print("Worker \'" + str(Worker) + "\' did not respond after 5 seconds.")
-
-	#closing socket
-	workerSocket.close()
+def kill_worker(worker):
+    """kills a worker"""
+    print("Killing worker: " + str(worker))
+    send_request(worker, new_request_dict("SHUTDOWN", 1010, '', '', 'Testing.'))
 
 
+def send_request(worker, request_data, wait_response=False):
+    """sends data to a worker"""
+    #encapsula
+    sending_data = json.dumps(request_data)
 
-def newRequestDict(Action, Source, Field1, Field2, Data):
-	returnDict = {}
-	returnDict["Action"] = Action #[ "RESIZE" | "SHUTDOWN" | "PING"]
-	returnDict["Source"] = Source #[ $URL | 'DATA' | $KEY ]
-	returnDict["Field1"] = Field1 #[ '' | $TARGET_WIDTH]
-	returnDict["Field2"] = Field2 #[ '' | $TARGET_HEIGHT]
-	returnDict["Data"]   = Data   #[ '' | $PING_DATA |$IMAGE]
-	return returnDict
+    #opening socket
+    worker_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    #Setting timeout
+    worker_socket.settimeout(5)
+
+    #trying to connect
+    try:
+        worker_socket.connect(('localhost', worker))
+    except ConnectionError:
+        print("Failed to connect to worker on port: "+str(worker))
+        return
+
+    #send data
+    worker_socket.sendall(sending_data)
+
+    received_data_buffer = ""
+    #waiting for response if necessary
+    if wait_response:
+        try:
+            #receive all data
+            while 1:
+                data_chunk = worker_socket.recv(1024)
+
+                if not data_chunk:
+                    break
+
+                print(data_chunk)
+                received_data_buffer += data_chunk
+        except socket.timeout:
+            print("Worker \'" + str(worker) + "\' did not respond after 5 seconds.")
+            return
+
+    #closing socket
+    worker_socket.close()
+
+def new_request_dict(action, source, field1, field2, data):
+    """Return a dict in the wanted format"""
+    return_dict = {}
+    return_dict["action"] = action #[ "RESIZE" | "SHUTDOWN" | "PING"]
+    return_dict["source"] = source #[ $URL | 'DATA' | $KEY ]
+    return_dict["field1"] = field1 #[ '' | $TARGET_WIDTH]
+    return_dict["field2"] = field2 #[ '' | $TARGET_HEIGHT]
+    return_dict["data"] = data   #[ '' | $PING_DATA |$IMAGE]
+    return return_dict
 
 if __name__ == '__main__':
-	main()
+    main()
