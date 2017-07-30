@@ -10,27 +10,31 @@ def main():
     processed_requests_count = 0
     #master_key = -1
     worker_port = get_worker_port()
+    print("Starting worker at port ", str(worker_port))
 
     #getting the socket
+    print("Binding to port.")
     worker_socket = get_socket(worker_port)
 
     #start receiving requests
+    print("Now listening for requests.")
     while True:
-        #accept connection
-        worker_socket.listen(1)
-        (worker_socket, addres) = worker_socket.accept()
-        #start processing it
         try:
-            if process_request(worker_socket, worker_port) == -1:
+            #accept connection
+            worker_socket.listen()
+            (request_socket, address) = worker_socket.accept()
+            #start processing it
+            if process_request(request_socket, worker_port) == -1:
                 #received shutdown flag
                 print(str(worker_port) + ":Master node requested for shutdown. bye")
-                worker_socket.close()
+                request_socket.close()
                 break
             else:
+                print("Processed one request.")
                 processed_requests_count += 1
 
         except KeyboardInterrupt:
-            print("KeyboardInterrupt. Shutting worker down.")
+            print("\nKeyboardInterrupt. Shutting worker down.")
             worker_socket.close()
             break
     return
@@ -40,36 +44,47 @@ def process_request(master_socket, worker_port):
     #data_string = json.dumps(data) #data serialized
     #data_loaded = json.loads(data) #data loaded
     #receive data
-
-    while 1:
-        data_chunk = master_socket.recv(1024)
-        #if end of transmition
-        if not data_chunk:
-            break
-        #concatenate data to buffer
-        print(len(data_chunk))
-        received_data_buffer += data_chunk
-
-    #processing request
-    received_dict = json.loads(received_data_buffer)
-
     return_val = 0
 
-    #error prevention
-    if not received_dict:
-        print(str(worker_port) + ":Error. Received object is " + type(received_dict))
-    else:
-        #Processing the data
+    #receive header
+    received_data = master_socket.recv(1024)
 
+    #processing request
+    received_dict = json.loads(received_data.decode())
+
+    #read the header
+    if received_dict["header"] == "True":
+        received_bytes = 0
+        expected_bytes = received_dict["size"]
+        received_data_buffer = bytes()
+
+        #send ack
+        master_socket.sendall("ACK".encode())
+
+        while expected_bytes > received_bytes:
+            data_chunk = master_socket.recv(1024)
+            received_bytes += len(data_chunk)
+
+            #if end of transmition
+            if not data_chunk:
+                print("Connection closed from master while expecting more data.")
+                break
+
+            #concatenate data to buffer
+            received_data_buffer += data_chunk
+
+        received_dict = json.loads(received_data_buffer.decode())
+
+        #ping signal
+        if received_dict["action"] == "PING":
+            sending_data = str(worker_port) + " says: pong."
+            master_socket.sendall(sending_data.encode())
+            return_val = 1
+    else:
         #shutdown signal
-        if received_dict["Action"] == "SHUTDOWN":
+        if received_dict["action"] == "SHUTDOWN":
             return_val = -1
             master_socket.sendall(str(worker_port) + ": Shutting down.")
-
-        if received_dict["Action"] == "PING":
-            print(str(worker_port) + ": " + received_dict["Data"])
-            master_socket.sendall(str(worker_port) + ": Pong.")
-            return_val = 1
 
     #closing socket
     master_socket.close()
@@ -98,8 +113,8 @@ def get_socket(worker_port):
     try:
         #binding to the right port
         serversocket.bind(('localhost', worker_port))
-    except ConnectionError:
-        print("\nFailed to bind to port " + str(worker_port))
+    except OSError:
+        print("Failed to bind to port " + str(worker_port))
         exit(-1)
     #return that shit
     return serversocket
