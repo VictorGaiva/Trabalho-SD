@@ -2,7 +2,7 @@
 import sys      #system related task
 import socket   #for socket communication
 import json     #for sending and receiving objects
-
+import utils
 
 def main():
     """Main function for the code"""
@@ -10,14 +10,14 @@ def main():
     processed_requests_count = 0
     #master_key = -1
     worker_port = get_worker_port()
-    print("Starting worker at port ", str(worker_port))
+    utils.print_info("Starting worker at port " + str(worker_port))
 
     #getting the socket
-    print("Binding to port.")
+    utils.print_info("Binding to port.")
     worker_socket = get_socket(worker_port)
 
     #start receiving requests
-    print("Now listening for requests.")
+    utils.print_info("Now listening for requests.")
     while True:
         try:
             #accept connection
@@ -26,15 +26,15 @@ def main():
             #start processing it
             if process_request(request_socket, worker_port) == -1:
                 #received shutdown flag
-                print(str(worker_port) + ":Master node requested for shutdown. bye")
+                utils.print_warning(str(worker_port) + ":Master node requested for shutdown. bye")
                 request_socket.close()
                 break
             else:
-                print("Processed one request.")
+                utils.print_success("Processed one request.")
                 processed_requests_count += 1
 
         except KeyboardInterrupt:
-            print("\nKeyboardInterrupt. Shutting worker down.")
+            utils.print_warning("\nKeyboardInterrupt. Shutting worker down.")
             worker_socket.close()
             break
     return
@@ -67,7 +67,7 @@ def process_request(master_socket, worker_port):
 
             #if end of transmition
             if not data_chunk:
-                print("Connection closed from master while expecting more data.")
+                utils.print_error("Connection closed from master while expecting more data.")
                 break
 
             #concatenate data to buffer
@@ -95,13 +95,19 @@ def get_worker_port():
     """returns the worker port from the given argument"""
     #Checking argument
     if len(sys.argv) != 2:
-        print("Missing work port number.\nUsage:\t$" + sys.argv[0]+" <port>")
+        utils.print_error("Missing work port number.")
+        utils.print_info("Usage:\t$" + sys.argv[0]+" <port>")
         exit(-1)
     #Checking argument type
     try:
         worker_port = int(sys.argv[1])
     except TypeError:
-        print("Argument must be a number.\nUsage:\t$" + sys.argv[0]+" <port>")
+        utils.print_error("Argument must be a number.")
+        utils.print_info("Usage:\t$" + sys.argv[0]+" <port>")
+        exit(-1)
+    except ValueError:
+        utils.print_error("Argument must be a number.")
+        utils.print_info("Usage:\t$" + sys.argv[0]+" <port>")
         exit(-1)
     return worker_port
 
@@ -114,20 +120,10 @@ def get_socket(worker_port):
         #binding to the right port
         serversocket.bind(('localhost', worker_port))
     except OSError:
-        print("Failed to bind to port " + str(worker_port))
+        utils.print_error("Failed to bind to port " + str(worker_port))
         exit(-1)
     #return that shit
     return serversocket
-
-def new_request_dict(action, source, field1, field2, data):
-    """Return a dict in the wanted format"""
-    return_dict = {}
-    return_dict["action"] = action #[ "RESIZE" | "SHUTDOWN" | "PING"]
-    return_dict["source"] = source #[ $URL | 'DATA' | $KEY ]
-    return_dict["field1"] = field1 #[ '' | $TARGET_WIDTH]
-    return_dict["field2"] = field2 #[ '' | $TARGET_HEIGHT]
-    return_dict["data"] = data   #[ '' | $PING_DATA |$IMAGE]
-    return return_dict
 
 if __name__ == '__main__':
     main()

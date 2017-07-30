@@ -3,39 +3,47 @@ import sys      #system related task
 import socket   #for socket communication
 import json     #for sending and receiving objects
 import csv
+import utils
 
 def main():
     """Main function of the code"""
     #get list of workers
     workers = get_workers()
 
+    #main loop
     while True:
+        #keyboard input loop
         while True:
             try:
-                input_data = int(input("0:ping, 1:kill, 2:exit, 3:reload ->"))
+                input_data = int(input("(0)ping\n(1)kill\n(2)list\n(3)reload\n(4)exit \t:   "))
                 break
             except KeyboardInterrupt:
-                print("\nShutting master node down.")
+                utils.print_warning("\nShutting master node down.")
                 return
             except ValueError:
-                print("Please, enter a valid option.")
-
+                utils.print_error("Please, enter a valid option.")
+        
+        #treatin keyboard input
         if input_data == 0:
+            #for each worker
             for worker in workers:
                 ping_worker(worker)
         elif input_data == 1:
+            #for each worker
             for worker in workers:
                 kill_worker(worker)
         elif input_data == 2:
-            print("Shutting master node down.")
-            break
+            utils.print_info(workers)
         elif input_data == 3:
-            print("Reloading workers list.")
+            #reload
+            utils.print_info("Reloading workers list.")
             workers = get_workers()
+            utils.print_success("Done")
         elif input_data == 4:
-            print(workers)
+            utils.print_warning("Shutting master node down.")
+            break
         else:
-            print("Please, enter a valid option.")
+            utils.print_error("Please, enter a valid option.")
     #print(response)
 
 
@@ -43,7 +51,7 @@ def get_workers():
     """Returns a list with all the ports located in the .csv file passed as argument"""
     #Checking argument
     if len(sys.argv) != 2:
-        print("Missing filename.\nUsage:\t$" + sys.argv[0]+" <filename>")
+        utils.print_error("Missing filename.\nUsage:\t$" + sys.argv[0]+" <filename>")
         exit(-1)
     #Opening file
     with open(sys.argv[1], 'r') as csvfile:
@@ -59,13 +67,13 @@ def get_workers():
 
 def ping_worker(worker):
     """pings a worker"""
-    print("Pinging worker: " + str(worker))
-    send_request(worker, new_request_dict("PING", 1010, '', '', 'Testing.'), True)
+    utils.print_info("Pinging worker: " + str(worker))
+    send_request(worker, utils.new_request_dict("PING", 1010, '', '', 'Testing.'), True)
 
 def kill_worker(worker):
     """kills a worker"""
-    print("Killing worker: " + str(worker))
-    send_request(worker, new_request_dict("SHUTDOWN", 1010, '', '', 'Testing.'))
+    utils.print_info("Killing worker: " + str(worker))
+    send_request(worker, utils.new_request_dict("SHUTDOWN", 1010, '', '', 'Testing.'), True)
 
 
 def send_request(worker, request_data, wait_response=False):
@@ -83,7 +91,7 @@ def send_request(worker, request_data, wait_response=False):
     try:
         worker_socket.connect(('localhost', worker))
     except ConnectionError:
-        print("Failed to connect to worker on port: "+str(worker))
+        utils.print_warning("Failed to connect to worker on port: "+str(worker))
         return
 
     #If waiting for response is necessary, first send a header saying that
@@ -99,7 +107,7 @@ def send_request(worker, request_data, wait_response=False):
         #wait for ack
         ack = worker_socket.recv(1024)
         if ack.decode() != "ACK":
-            print("Failed to receive ack from worker.")
+            utils.print_error("Failed to receive ack from worker.")
             worker_socket.close()
             return
 
@@ -115,29 +123,20 @@ def send_request(worker, request_data, wait_response=False):
                 received_data = data_chunk
 
         except socket.timeout:
-            print("Worker \'" + str(worker) + "\' did not respond after 5 seconds.")
+            utils.print_error("Worker \'" + str(worker) + "\' did not respond after 5 seconds.")
             return
-        
+
         #treat received data
         if request_data["action"] == "PING":
-            print(received_data.decode())
+            utils.print_success("Received ping: ")
+            utils.print_success(received_data.decode())
+
     else:
         #send data
         worker_socket.sendall(sending_data.encode())
 
     #closing socket
     worker_socket.close()
-
-def new_request_dict(action, source, field1, field2, data):
-    """Return a dict in the wanted format"""
-    return_dict = {}
-    return_dict["header"] = "True"
-    return_dict["action"] = action #[ "RESIZE" | "SHUTDOWN" | "PING"]
-    return_dict["source"] = source #[ $URL | 'DATA' | $KEY ]
-    return_dict["field1"] = field1 #[ '' | $TARGET_WIDTH]
-    return_dict["field2"] = field2 #[ '' | $TARGET_HEIGHT]
-    return_dict["data"] = data   #[ '' | $PING_DATA |$IMAGE]
-    return return_dict
 
 if __name__ == '__main__':
     main()
