@@ -1,4 +1,7 @@
 """a few functions used both by the workers and master"""
+import csv
+import sys
+
 
 class Bcolor():
     """enumerating some conts"""
@@ -38,3 +41,21 @@ def new_request_dict(action, source, field1, field2, data):
     return_dict["field2"] = field2 #[ '' | $TARGET_HEIGHT]
     return_dict["data"] = data   #[ '' | $PING_DATA |$IMAGE]
     return return_dict
+
+def get_ports():
+    """Returns a list with all the ports located in the .csv file passed as argument"""
+    #Checking argument
+    if len(sys.argv) != 2:
+        print_error("Missing filename.\nUsage:\t$" + sys.argv[0]+" <filename>")
+        exit(-1)
+    #Opening file
+    with open(sys.argv[1], 'r') as csvfile:
+        #reading content
+        spamreader = csv.reader(csvfile, delimiter=',')
+        ports = []
+        #saving to list
+        for row in spamreader:
+            for val in row:
+                ports.append(int(val))
+    #returning it
+    return ports
