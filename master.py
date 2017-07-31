@@ -1,5 +1,4 @@
 """A script that send requests from the user to the workers on the network"""
-import sys      #system related task
 import socket   #for socket communication
 import json     #for sending and receiving objects
 import utils
