@@ -2,7 +2,6 @@
 import sys      #system related task
 import socket   #for socket communication
 import json     #for sending and receiving objects
-import csv
 import utils
 
 def main():
