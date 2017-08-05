@@ -1,19 +1,46 @@
 """A script that send requests from the user to the workers on the network"""
 import socket   #for socket communication
 import json     #for sending and receiving objects
+import threading
 import utils
+
 
 def main():
     """Main function of the code"""
     #get list of workers
     workers = utils.get_ports()
 
-    #main loop
+    #create a locker for the workers
+    workers_lock = threading.Lock()
+
+    #creating thread for keyboard handling
+    input_handler = threading.Thread(target=handle_keyboard_input,
+                                     name="input_handler",
+                                     args=(workers, workers_lock))
+
+    network_handler = threading.Thread(target=handle_network_requests,
+                                       name="network_handler",
+                                       args=(workers, workers_lock))
+
+    #start threads
+    input_handler.start()
+    network_handler.start()
+
+    #waits for a user request for shutdown
+    input_handler.join()
+
+def handle_network_requests(workers, workers_lock):
+    """Waits for incoming connections and process the requests"""
+    return
+
+def handle_keyboard_input(workers, workers_lock):
+    """Handles the user keyboar_input"""
+    #main handling loop
     while True:
-        #keyboard input loop
+        #reading loop
         while True:
             try:
-                input_data = int(input("(0)ping\n(1)kill\n(2)list\n(3)reload\n(4)exit \t:   "))
+                input_data = int(input("(0)ping\n(1)kill\n(2)list\n(4)exit \t:   "))
                 break
             except KeyboardInterrupt:
                 utils.print_warning("\nShutting master node down.")
@@ -21,32 +48,39 @@ def main():
             except ValueError:
                 utils.print_error("Please, enter a valid option.")
 
-        #treatin keyboard input
+        #treating keyboard input
         if input_data == 0:
             #for each worker
-            utils.print_info("Pinging workers.")
-            for worker in workers:
-                ping_worker(worker)
+            if workers_lock.acquire(blocking=False):#get lock
+                utils.print_info("Pinging workers.")
+                for worker in workers:
+                    ping_worker(worker)
+                workers_lock.release()#release lock
+            else:
+                utils.print_info("Workers are busy. Try again later.")
+
+        #kill workers
         elif input_data == 1:
             #for each worker
-            utils.print_info("Killing workers.")
-            for worker in workers:
-                kill_worker(worker)
+            if workers_lock.acquire(blocking=False):#get lock
+                utils.print_info("Killing workers.")
+                for worker in workers:
+                    kill_worker(worker)
+                workers_lock.release()#release lock
+            else:
+                utils.print_info("Workers are busy. Try again later.")
+
+        #print workers info
         elif input_data == 2:
             utils.print_info(workers)
-        elif input_data == 3:
-            #reload
-            utils.print_info("Reloading workers list.")
-            workers = utils.get_ports()
-            utils.print_success("Done")
+
+        #exit
         elif input_data == 4:
             utils.print_warning("Shutting master node down.")
-            break
+            return
         else:
             utils.print_error("Please, enter a valid option.")
-    #print(response)
-
-
+    return
 
 def ping_worker(worker):
     """pings a worker"""
