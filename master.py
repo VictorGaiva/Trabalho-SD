@@ -7,6 +7,8 @@ import utils
 
 def main():
     """Main function of the code"""
+    #setting the default port for incoming requests
+    requests_port = 12339
     #get list of workers
     workers = utils.get_ports()
 
@@ -17,10 +19,11 @@ def main():
     input_handler = threading.Thread(target=handle_keyboard_input,
                                      name="input_handler",
                                      args=(workers, workers_lock))
-
+    
+    #creating thread for network handling
     network_handler = threading.Thread(target=handle_network_requests,
                                        name="network_handler",
-                                       args=(workers, workers_lock))
+                                       args=(workers, workers_lock, requests_port))
 
     #start threads
     input_handler.start()
@@ -29,8 +32,31 @@ def main():
     #waits for a user request for shutdown
     input_handler.join()
 
-def handle_network_requests(workers, workers_lock):
+def handle_network_requests(workers, workers_lock, requests_port):
     """Waits for incoming connections and process the requests"""
+    #tries to bind to received port
+    network_socket = utils.get_socket(requests_port, True)
+    if not network_socket:
+        return
+
+    utils.print_info("Now listening for incoming requests.")
+    while True:
+        #accept connection
+        network_socket.listen()
+
+        utils.print_info("Received one connection request. Accepting it.")
+
+        (request_socket, address) = network_socket.accept()
+
+        utils.print_info("Processing request.")
+
+        #process incoming request
+        #process_network_request(request_socket, address, workers_lock, workers)
+
+        #close request socket
+        request_socket.close()
+
+
     return
 
 def handle_keyboard_input(workers, workers_lock):

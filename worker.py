@@ -1,6 +1,5 @@
 """A script that listen for requests from given port"""
 import sys      #system related task
-import socket   #for socket communication
 import json     #for sending and receiving objects
 import utils
 
@@ -15,7 +14,7 @@ def main():
 
     if isinstance(available_ports, int):
         #tries to bind to received port
-        worker_socket = get_socket(available_ports, True)
+        worker_socket = utils.get_socket(available_ports, True)
         if not worker_socket:
             return
         #saves the port number
@@ -23,7 +22,7 @@ def main():
     else:
         #keep trying to bind to a port until gets some
         for port in available_ports:
-            worker_socket = get_socket(port, False)
+            worker_socket = utils.get_socket(port)
             if worker_socket:
                 worker_port = port
                 break
@@ -143,21 +142,6 @@ def get_worker_port():
         exit(-1)
     return worker_port
 
-
-def get_socket(worker_port, verbose):
-    """returns a socket binded to given port"""
-    #opening the socket
-    serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM) #Commom TCP socket
-    try:
-        #binding to the right port
-        serversocket.bind(('localhost', worker_port))
-    except OSError:
-        if verbose:
-            utils.print_error("Failed to bind to port " + str(worker_port))
-        return False
-
-    #return that shit
-    return serversocket
 
 def receive_request(master_socket, size):
     """waits for data from given socket"""

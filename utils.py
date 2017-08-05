@@ -1,7 +1,7 @@
 """a few functions used both by the workers and master"""
 import csv
 import sys
-
+import socket
 
 class Bcolor():
     """enumerating some conts"""
@@ -59,3 +59,18 @@ def get_ports():
                 ports.append(int(val))
     #returning it
     return ports
+
+def get_socket(port, verbose=False):
+    """returns a socket binded to given port"""
+    #opening the socket
+    serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM) #Commom TCP socket
+    try:
+        #binding to the right port
+        serversocket.bind(('localhost', port))
+    except OSError:
+        if verbose:
+            print_error("Failed to bind to port " + str(port))
+        return False
+
+    #return that shit
+    return serversocket
