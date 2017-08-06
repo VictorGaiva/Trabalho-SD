@@ -1,6 +1,7 @@
 """A script that listen for requests from given port"""
 import sys      #system related task
 import json     #for sending and receiving objects
+import PIL
 import utils
 
 def main():
@@ -172,6 +173,16 @@ def decode_dict(received_data):
         utils.print_error("Error trying to decode json data.")
         return False
     return received_dict
+
+def resize_image(image_data, target_width=0, target_height=0):
+    """Resizes an image to the target width or height"""
+    basewidth = 300
+    img = PIL.Image.open('fullsized_image.jpg')
+    wpercent = (basewidth / float(img.size[0]))
+    hsize = int((float(img.size[1]) * float(wpercent)))
+    img = img.resize((basewidth, hsize), PIL.Image.ANTIALIAS)
+    img.save('resized_image.jpg')
+
 
 if __name__ == '__main__':
     main()
