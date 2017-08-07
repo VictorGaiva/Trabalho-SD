@@ -113,7 +113,7 @@ def for_each_worker(workers, action, sequential=False, data=''):
     if action == "TEST":
         data = []
         import glob
-        for fle in glob.glob("./test_files"):
+        for fle in glob.glob("./test_files/sci.space/"):
             with open(fle) as file_data:
                 data.append(file_data.read())
         action = "PROCESS"
