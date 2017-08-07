@@ -31,14 +31,11 @@ def print_info(message):
     print(Bcolor.OKBLUE + str(message) + Bcolor.ENDC)
 
 
-def new_request_dict(action, source, field1, field2, data):
+def new_request_dict(action, data, header=True):
     """Return a dict in the wanted format"""
     return_dict = {}
-    return_dict["header"] = "True"
-    return_dict["action"] = action #[ "RESIZE" | "SHUTDOWN" | "PING"]
-    return_dict["source"] = source #[ $URL | 'DATA' | $KEY ]
-    return_dict["field1"] = field1 #[ '' | $TARGET_WIDTH]
-    return_dict["field2"] = field2 #[ '' | $TARGET_HEIGHT]
+    return_dict["header"] = header
+    return_dict["action"] = action #[ "RESIZE" | "SHUTDOWN" | "PING" | "WORD_COUNT"]
     return_dict["data"] = data   #[ '' | $PING_DATA |$IMAGE]
     return return_dict
 
@@ -74,3 +71,6 @@ def get_socket(port, verbose=False):
 
     #return that shit
     return serversocket
+def data_reduce(dict1, dict2):
+    """Combine the items in two dictionaries summing them"""
+    return {k: dict1.get(k, 0) + dict2.get(k, 0) for k in dict1.keys() | dict2.keys()}

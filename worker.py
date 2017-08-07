@@ -78,7 +78,7 @@ def process_request(master_socket, worker_port):
         return 0
 
     #read the header
-    if received_dict["header"] == "True":
+    if received_dict["header"]:
 
         #send ack
         master_socket.sendall("ACK".encode())
@@ -200,15 +200,23 @@ def word_count(text_data):
 
     from collections import defaultdict
 
+    #turn json into list
+    text_list = json.loads(text_data)
+
+    #list of words of each text
+    processed_text_list = []
+
     #remove ponctuation and make all the letters lower case in the text
-    words = ''.join(c if c.isalnum() else ' ' for c in text_data.lower()).split()
+    for text_ in text_list:
+        processed_text_list.append(''.join(c if c.isalnum() else ' ' for c in text_.lower()).split())
 
     #preparing the returning variable
     result = defaultdict(int)
 
     #do the counting
-    for word in words:
-        result[word] += 1
+    for processed_text in processed_text_list:
+        for word in processed_text:
+            result[word] += 1
 
     #turning data into a json file
     json_result = json.dumps(result)

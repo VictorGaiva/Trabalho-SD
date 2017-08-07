@@ -7,6 +7,10 @@ import time
 import PIL
 import utils
 
+#global
+return_data = []
+return_data_lock = threading.Lock()
+
 def main():
     """Main function of the code"""
     #setting the default port for incoming requests
@@ -107,7 +111,7 @@ def for_each_worker(workers, action, sequential=False, data=''):
     """Makes action for each worker in list. If\
        sequential flag is on, do in a loop,\
        else, do in separated threads"""
-    count = 0
+    workers_count = 0
 
     #for testing purposes
     if action == "TEST":
@@ -116,63 +120,135 @@ def for_each_worker(workers, action, sequential=False, data=''):
         for fle in glob.glob("./test_files/sci.space/*"):
             with open(fle) as file_data:
                 data.append(file_data.read())
-        utils.print_success(len(data))
         action = "PROCESS"
         sequential = False
 
     #if sequential
     if sequential:
+        if action == "PING" or action == "KILL":
+            #the response of each worker with its associated port
+            cumulative_response = []
+            #for each worker
+            for worker in workers:
+                #send a request
+                response = send_request(worker, utils.new_request_dict(action, ''))
+                if response:
+                    cumulative_response.append([worker, response])
+                    utils.print_success("Worker response: " + response)
+
         #for each worker
         for worker in workers:
             #send a request
-            if send_request(worker, utils.new_request_dict(action, 1010, '', '', '')):
-                count += 1
+            if send_request(worker, utils.new_request_dict(action, '')):
+                workers_count += 1
 
     #in threads
     else:
         #count how many workers are alive
-        workers_alive = for_each_worker(workers, "PING", True)
-        count = workers_alive
-
+        utils.print_info("Checking who is alive.")
+        workers_response = for_each_worker(workers, "PING", True)
+        if isinstance(workers_response, list):
+            workers_count = len(workers_response)
+        else:
+            workers_count = workers_response
         #if there is no one to process requests
-        if workers_alive == 0:
+        if workers_count == 0:
             utils.print_error("No active workers on the network to process request.")
-            return workers_alive
-
+            return workers_count
+        utils.print_info(str(workers_count)+" workers in the network.")
         #check if there is data
         if data == '':
             utils.print_error("No data to process. Forgot the parameter?")
-            return workers_alive
+            return workers_count
 
         #if you want the workers to process the data
         if action == "PROCESS":
             #make an array which will hold the threads
             worker_handler_threads = []
 
-            #make an array which will hold the result of the data processing
-            processed_data = []
+            #print
+            utils.print_info("Preparing data...")
 
             #split the list of data to distribute to the workers
-            chunk_size = int(len(data)/workers_alive) + (len(data) % workers_alive > 0)
+            chunk_size = int(len(data)/workers_count) + (len(data) % workers_count > 0)
             pre_processed_count = 0
-            json_chunks = []
+            data_chunks = []
             while pre_processed_count < len(data):
                 #end of data
                 if (pre_processed_count + chunk_size) > len(data):
-                    chunk = data[pre_processed_count : int(len(data)%chunk_size)]
-                    json_chunks.append(json.dumps(chunk))
+                    chunk = data[pre_processed_count : pre_processed_count + int(len(data)%chunk_size)]
+                    data_chunks.append(json.dumps(chunk))
                 #else
                 else:
                     chunk = data[pre_processed_count:pre_processed_count+chunk_size]
-                    json_chunks.append(json.dumps(chunk))
+                    data_chunks.append(json.dumps(chunk))
                 #increase count
                 pre_processed_count += chunk_size
 
             #test
-            utils.print_success(str(workers_alive))
-            utils.print_success(str(len(json_chunks)))
+            #utils.print_success(str(workers_alive))
+            #utils.print_success(str(len(json_chunks)))
 
-    return count
+            #for each response it received
+            utils.print_info("Divided to " + str(workers_count)+ " workers.")
+            data_index = 0
+            for response in workers_response:
+                if data_index > len(workers_response):
+                    utils.print_error("Logic error.")
+                    break
+
+                #prepare the thread
+                worker_handler_threads.append(
+                    threading.Thread(
+                        target=send_request,
+                        args=(response[0],
+                              utils.new_request_dict("WORD_COUNT", data_chunks[data_index]),
+                              True)))
+                data_index += 1
+
+            #start the threads
+            utils.print_info("Starting threads.")
+            for work_thread in worker_handler_threads:
+                work_thread.start()
+
+            #wait for them to finish
+            utils.print_info("Waiting for workers to finish.")
+            for work_thread in worker_handler_threads:
+                work_thread.join()
+
+            #check if the data is fully processed
+            if False in return_data:
+                utils.print_error("Failed to process data.")#DO SOMETHING TO FIX
+            else:
+                utils.print_success("Data successfully processed by all the "
+                                    + str(workers_count)+" workers.")
+
+            #cleaning and reducing the data
+            utils.print_info("Reducing data.")
+            clean_data = {}
+            for data_point in return_data:
+                clean_data = utils.data_reduce(clean_data, json.loads(data_point[1]))
+
+            file_name = "file1.json"
+            #savin to a file
+            utils.print_info("Data reduced. Saving to file.")
+            try:
+                from operator import itemgetter
+                sorted_data = sorted(clean_data.items(), key=itemgetter(1), reverse=True)
+                with open("./cache/" + file_name, "w") as cache_file:
+                    cache_file.write(json.dumps(sorted_data))
+                utils.print_success("Saved succesfully to cache directory.")
+            except OSError:
+                utils.print_error("Error in saving file.")
+
+            #print(clean_data)
+            #return data
+            return clean_data
+
+    if cumulative_response:
+        return cumulative_response
+    else:
+        return workers_count
 def handle_network_requests(workers, workers_lock, requests_port, shutdown_signal):
     """Waits for incoming connections and process the requests"""
     #tries to bind to received port
@@ -233,7 +309,7 @@ def handle_network_requests(workers, workers_lock, requests_port, shutdown_signa
 
 
 
-def send_request(worker, request_data):
+def send_request(worker, request_data, threaded_return=False):
     """sends data to a worker"""
     #encapsula
     sending_data = json.dumps(request_data)
@@ -242,7 +318,7 @@ def send_request(worker, request_data):
     worker_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     #Setting timeout
-    worker_socket.settimeout(5)
+    worker_socket.settimeout(30)
 
     #trying to connect
     try:
@@ -260,7 +336,7 @@ def send_request(worker, request_data):
         return False
 
     #send data
-    worker_socket.send(encoded_data)
+    worker_socket.sendall(encoded_data)
 
     #wait for response
     received_data = bytes()
@@ -269,10 +345,10 @@ def send_request(worker, request_data):
             data_chunk = worker_socket.recv(1024)
             if not data_chunk:
                 break
-            received_data = data_chunk
+            received_data += data_chunk
 
     except socket.timeout:
-        utils.print_error("Worker \'" + str(worker) + "\' did not respond after 5 seconds.")
+        utils.print_error("Worker \'" + str(worker) + "\' did not respond after 30 seconds.")
         return False
     if not received_data:
         utils.print_error("Connection closed from worker while expecting ack.")
@@ -283,6 +359,10 @@ def send_request(worker, request_data):
     worker_socket.close()
 
     #return received data
+    if threaded_return:
+        return_data_lock.acquire()
+        return_data.append([worker, received_data.decode()])
+        return_data_lock.release()
     return received_data.decode()
 
 def send_header(worker_socket, size):
