@@ -3,9 +3,9 @@ import socket   #for socket communication
 import json     #for sending and receiving objects
 import threading
 import os
+import time
 import PIL
 import utils
-import time
 
 def main():
     """Main function of the code"""
@@ -113,10 +113,12 @@ def for_each_worker(workers, action, sequential=False, data=''):
     if action == "TEST":
         data = []
         import glob
-        for fle in glob.glob("./test_files/sci.space/"):
+        for fle in glob.glob("./test_files/sci.space/*"):
             with open(fle) as file_data:
                 data.append(file_data.read())
+        utils.print_success(len(data))
         action = "PROCESS"
+        sequential = False
 
     #if sequential
     if sequential:
@@ -130,6 +132,7 @@ def for_each_worker(workers, action, sequential=False, data=''):
     else:
         #count how many workers are alive
         workers_alive = for_each_worker(workers, "PING", True)
+        count = workers_alive
 
         #if there is no one to process requests
         if workers_alive == 0:
@@ -149,8 +152,25 @@ def for_each_worker(workers, action, sequential=False, data=''):
             #make an array which will hold the result of the data processing
             processed_data = []
 
+            #split the list of data to distribute to the workers
+            chunk_size = int(len(data)/workers_alive) + (len(data) % workers_alive > 0)
+            pre_processed_count = 0
+            json_chunks = []
+            while pre_processed_count < len(data):
+                #end of data
+                if (pre_processed_count + chunk_size) > len(data):
+                    chunk = data[pre_processed_count : int(len(data)%chunk_size)]
+                    json_chunks.append(json.dumps(chunk))
+                #else
+                else:
+                    chunk = data[pre_processed_count:pre_processed_count+chunk_size]
+                    json_chunks.append(json.dumps(chunk))
+                #increase count
+                pre_processed_count += chunk_size
 
-
+            #test
+            utils.print_success(str(workers_alive))
+            utils.print_success(str(len(json_chunks)))
 
     return count
 def handle_network_requests(workers, workers_lock, requests_port, shutdown_signal):
