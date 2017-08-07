@@ -11,10 +11,11 @@ def main():
     """Main function of the code"""
     #setting the default port for incoming requests
     requests_port = 12339
+
     #get list of workers
     workers = utils.get_ports()
 
-    #create a locker for the workers
+    #create a lockers for the workers
     workers_lock = threading.Lock()
     shutdown_signal = threading.Event()
 
@@ -32,6 +33,7 @@ def main():
     #start taking care of keyboard inputs
     handle_keyboard_input(workers, workers_lock, shutdown_signal)
 
+    #if returned from keyboard handling, wait for network_handler to shutdown
     network_handler.join()
 
 def handle_keyboard_input(workers, workers_lock, shutdown_signal):
@@ -41,7 +43,7 @@ def handle_keyboard_input(workers, workers_lock, shutdown_signal):
         #reading loop
         while True:
             try:
-                utils.print_success("(0)ping\n(1)kill\n(2)list\n(4)exit")
+                utils.print_success("(0)ping\n(1)kill\n(2)list\n(3)test\n(4)exit")
                 input_data = int(input())
                 break
             except KeyboardInterrupt:
@@ -54,22 +56,23 @@ def handle_keyboard_input(workers, workers_lock, shutdown_signal):
 
         #treating keyboard input
         if input_data == 0:
-            #for each worker
+            #ping each worker
             if workers_lock.acquire(blocking=False):#get lock
                 utils.print_info("Pinging workers.")
-                for worker in workers:
-                    ping_worker(worker)
+                #if there are no workers alive
+                if for_each_worker(workers, "PING", True) == 0:
+                    utils.print_warning("Not active worker on the network.")
                 workers_lock.release()#release lock
             else:
                 utils.print_info("Workers are busy. Try again later.")
 
-        #kill workers
         elif input_data == 1:
-            #for each worker
+            #kill workers
             if workers_lock.acquire(blocking=False):#get lock
                 utils.print_info("Killing workers.")
-                for worker in workers:
-                    kill_worker(worker)
+                #if there are no workers alive
+                if for_each_worker(workers, "KILL", True) == 0:
+                    utils.print_warning("Not active worker on the network.")
                 workers_lock.release()#release lock
             else:
                 utils.print_info("Workers are busy. Try again later.")
@@ -77,6 +80,18 @@ def handle_keyboard_input(workers, workers_lock, shutdown_signal):
         #print workers info
         elif input_data == 2:
             utils.print_info(workers)
+
+        #test workers
+        elif input_data == 3:
+            #test workers
+            if workers_lock.acquire(blocking=False):#get lock
+                utils.print_info("Testing workers.")
+                #if there are no workers alive
+                if for_each_worker(workers, "TEST", True) == 0:
+                    utils.print_warning("Not active worker on the network.")
+                workers_lock.release()#release lock
+            else:
+                utils.print_info("Workers are busy. Try again later.")
 
         #exit
         elif input_data == 4:
@@ -88,6 +103,56 @@ def handle_keyboard_input(workers, workers_lock, shutdown_signal):
             utils.print_error("Please, enter a valid option.")
     return
 
+def for_each_worker(workers, action, sequential=False, data=''):
+    """Makes action for each worker in list. If\
+       sequential flag is on, do in a loop,\
+       else, do in separated threads"""
+    count = 0
+
+    #for testing purposes
+    if action == "TEST":
+        data = []
+        import glob
+        for fle in glob.glob("./test_files"):
+            with open(fle) as file_data:
+                data.append(file_data.read())
+        action = "PROCESS"
+
+    #if sequential
+    if sequential:
+        #for each worker
+        for worker in workers:
+            #send a request
+            if send_request(worker, utils.new_request_dict(action, 1010, '', '', '')):
+                count += 1
+
+    #in threads
+    else:
+        #count how many workers are alive
+        workers_alive = for_each_worker(workers, "PING", True)
+
+        #if there is no one to process requests
+        if workers_alive == 0:
+            utils.print_error("No active workers on the network to process request.")
+            return workers_alive
+
+        #check if there is data
+        if data == '':
+            utils.print_error("No data to process. Forgot the parameter?")
+            return workers_alive
+
+        #if you want the workers to process the data
+        if action == "PROCESS":
+            #make an array which will hold the threads
+            worker_handler_threads = []
+
+            #make an array which will hold the result of the data processing
+            processed_data = []
+
+
+
+
+    return count
 def handle_network_requests(workers, workers_lock, requests_port, shutdown_signal):
     """Waits for incoming connections and process the requests"""
     #tries to bind to received port
@@ -146,15 +211,6 @@ def handle_network_requests(workers, workers_lock, requests_port, shutdown_signa
     network_socket.close()
     return
 
-def ping_worker(worker):
-    """pings a worker"""
-    #utils.print_info("Pinging worker: " + str(worker))
-    send_request(worker, utils.new_request_dict("PING", 1010, '', '', 'Testing.'))
-
-def kill_worker(worker):
-    """kills a worker"""
-    #utils.print_info("Killing worker: " + str(worker))
-    send_request(worker, utils.new_request_dict("SHUTDOWN", 1010, '', '', 'Testing.'))
 
 
 def send_request(worker, request_data):
@@ -173,7 +229,7 @@ def send_request(worker, request_data):
         worker_socket.connect(('localhost', worker))
     except ConnectionError:
         #utils.print_warning("No worker at " + str(worker)+ ".")
-        return
+        return False
 
     #encode data
     encoded_data = sending_data.encode()
@@ -181,7 +237,7 @@ def send_request(worker, request_data):
     #send header and waits for ack
     if not send_header(worker_socket, len(encoded_data)):
         worker_socket.close()
-        return
+        return False
 
     #send data
     worker_socket.send(encoded_data)
@@ -197,22 +253,17 @@ def send_request(worker, request_data):
 
     except socket.timeout:
         utils.print_error("Worker \'" + str(worker) + "\' did not respond after 5 seconds.")
-        return
+        return False
     if not received_data:
         utils.print_error("Connection closed from worker while expecting ack.")
         worker_socket.close()
-        return
+        return False
 
-    #treat received data
-    if request_data["action"] == "PING":
-        utils.print_success("Ping response: "+received_data.decode())
-
-    #
-    if request_data["action"] == "SHUTDOWN":
-        utils.print_success("Shutdown response:"+received_data.decode())
-
-    #closing socket
+    #close socket
     worker_socket.close()
+
+    #return received data
+    return received_data.decode()
 
 def send_header(worker_socket, size):
     """sends a header for the worker and waits for ack"""

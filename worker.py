@@ -99,11 +99,19 @@ def process_request(master_socket, worker_port):
             sending_data = str(worker_port) + "->Pong."
             master_socket.sendall(sending_data.encode())
             return_val = 1
+
+        #word count
+        elif received_dict["action"] == "WORD_COUNT":
+            sending_data = word_count(received_dict["data"])
+            master_socket.sendall(sending_data.encode())
+            return_val = 1
+
         #shutdown signal
         elif received_dict["action"] == "SHUTDOWN":
             sending_data = str(worker_port) + "->Shutting down."
             master_socket.sendall(sending_data.encode())
             return_val = -1
+
     #non-header package received
     else:
         utils.print_error("Unrecognized request.")
@@ -183,6 +191,30 @@ def resize_image(image_data, target_width=0, target_height=0):
     img = img.resize((basewidth, hsize), PIL.Image.ANTIALIAS)
     img.save('resized_image.jpg')
 
+def word_count(text_data):
+    """A simple word counting algorithm which receives a text string\
+       and returns a dictionary with the number of times each word appears"""
+    #error prevention
+    if text_data == '':
+        return json.dumps({})
+
+    from collections import defaultdict
+
+    #remove ponctuation and make all the letters lower case in the text
+    words = ''.join(c if c.isalnum() else ' ' for c in text_data.lower()).split()
+
+    #preparing the returning variable
+    result = defaultdict(int)
+
+    #do the counting
+    for word in words:
+        result[word] += 1
+
+    #turning data into a json file
+    json_result = json.dumps(result)
+
+    #returning data
+    return json_result
 
 if __name__ == '__main__':
     main()
