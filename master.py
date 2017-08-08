@@ -113,6 +113,9 @@ def for_each_worker(workers, action, sequential=False, data=''):
        sequential flag is on, do in a loop,\
        else, do in separated threads"""
     workers_count = 0
+    return_data_lock.acquire()
+    return_data.clear()
+    return_data_lock.release()
 
     #for testing purposes
     if action == "TEST":
@@ -230,6 +233,8 @@ def for_each_worker(workers, action, sequential=False, data=''):
             for data_point in return_data:
                 clean_data = utils.data_reduce(clean_data, json.loads(data_point[1]))
 
+            #clear return_data
+
             time_stamp = '{:%Y_%m_%d_%H_%M_%S}'.format(datetime.datetime.now())
             file_name = "processed_data_"+time_stamp+".json"
             #savin to a file
@@ -326,8 +331,13 @@ def send_request(worker, request_data, threaded_return=False):
     try:
         worker_socket.connect(('localhost', worker))
     except ConnectionError:
-        #utils.print_warning("No worker at " + str(worker)+ ".")
-        return False
+        if threaded_return:
+            utils.print_error("No worker at " + str(worker)+ ".")
+            return_data_lock.acquire()
+            return_data.append([worker, False])
+            return_data_lock.release()
+        else:
+            return False
 
     #encode data
     encoded_data = sending_data.encode()
@@ -335,7 +345,12 @@ def send_request(worker, request_data, threaded_return=False):
     #send header and waits for ack
     if not send_header(worker_socket, len(encoded_data)):
         worker_socket.close()
-        return False
+        if threaded_return:
+            return_data_lock.acquire()
+            return_data.append([worker, False])
+            return_data_lock.release()
+        else:
+            return False
 
     #send data
     worker_socket.sendall(encoded_data)
@@ -351,11 +366,21 @@ def send_request(worker, request_data, threaded_return=False):
 
     except socket.timeout:
         utils.print_error("Worker \'" + str(worker) + "\' did not respond after 30 seconds.")
-        return False
+        if threaded_return:
+            return_data_lock.acquire()
+            return_data.append([worker, False])
+            return_data_lock.release()
+        else:
+            return False
     if not received_data:
         utils.print_error("Connection closed from worker while expecting ack.")
         worker_socket.close()
-        return False
+        if threaded_return:
+            return_data_lock.acquire()
+            return_data.append([worker, False])
+            return_data_lock.release()
+        else:
+            return False
 
     #close socket
     worker_socket.close()

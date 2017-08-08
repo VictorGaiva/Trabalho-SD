@@ -51,8 +51,8 @@ def main():
                 worker_socket.close()
                 break
             elif retval == 1:
-                utils.print_success("Processed one request.")
                 processed_requests_count += 1
+                utils.print_success("Processed one request. " + str(processed_requests_count)+" so far.")
             else:
                 utils.print_error("Failed to process one request.")
 
