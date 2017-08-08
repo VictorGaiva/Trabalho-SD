@@ -4,6 +4,7 @@ import json     #for sending and receiving objects
 import threading
 import os
 import time
+import datetime
 import PIL
 import utils
 
@@ -229,7 +230,8 @@ def for_each_worker(workers, action, sequential=False, data=''):
             for data_point in return_data:
                 clean_data = utils.data_reduce(clean_data, json.loads(data_point[1]))
 
-            file_name = "file1.json"
+            time_stamp = '{:%Y_%m_%d_%H_%M_%S}'.format(datetime.datetime.now())
+            file_name = "processed_data_"+time_stamp+".json"
             #savin to a file
             utils.print_info("Data reduced. Saving to file.")
             try:

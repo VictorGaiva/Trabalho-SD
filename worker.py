@@ -94,29 +94,41 @@ def process_request(master_socket, worker_port):
             utils.print_error("Error in received package.")
             return 0
 
-        #ping signal
-        if received_dict["action"] == "PING":
-            sending_data = str(worker_port) + "->Pong."
-            master_socket.sendall(sending_data.encode())
-            return_val = 1
+        #do the processing
+        (processed_data, flags) = do_process_data(worker_port, received_dict)
 
-        #word count
-        elif received_dict["action"] == "WORD_COUNT":
-            sending_data = word_count(received_dict["data"])
-            master_socket.sendall(sending_data.encode())
-            return_val = 1
+        #send data
+        master_socket.sendall(processed_data.encode())
 
-        #shutdown signal
-        elif received_dict["action"] == "SHUTDOWN":
-            sending_data = str(worker_port) + "->Shutting down."
-            master_socket.sendall(sending_data.encode())
-            return_val = -1
+        #set flag
+        return_val = flags
 
     #non-header package received
     else:
         utils.print_error("Unrecognized request.")
 
     return return_val
+
+def do_process_data(worker_port, request):
+    """Find what action is need on the request e return\
+       the resulting processed request with a flag"""
+    flags = 0
+    sending_data = ''
+    #ping signal
+    if request["action"] == "PING":
+        sending_data = str(worker_port) + "->Pong."
+        flags = 1
+
+    #word count
+    elif request["action"] == "WORD_COUNT":
+        sending_data = word_count(request["data"])
+        flags = 1
+
+    #shutdown signal
+    elif request["action"] == "SHUTDOWN":
+        sending_data = str(worker_port) + "->Shutting down."
+        flags = -1
+    return (sending_data, flags)
 
 def get_worker_port():
     """returns the worker port from the given argument"""

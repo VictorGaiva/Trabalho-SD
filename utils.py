@@ -28,7 +28,7 @@ def print_success(message):
 
 def print_info(message):
     """prints a success message"""
-    print(Bcolor.OKBLUE + str(message) + Bcolor.ENDC)
+    print(Bcolor.OKBLUE + "INFO: " + str(message) + Bcolor.ENDC)
 
 
 def new_request_dict(action, data, header=True):

@@ -1,3 +1,4 @@
 out.txt
 cache/file1.json
 __pycache__/*
+cache/processed_data_*.json
