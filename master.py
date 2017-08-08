@@ -241,7 +241,10 @@ def for_each_worker(workers, action, sequential=False, data=''):
             utils.print_info("Data reduced. Saving to file.")
             try:
                 from operator import itemgetter
-                sorted_data = sorted(clean_data.items(), key=itemgetter(1), reverse=True)
+                from collections import OrderedDict
+
+                sorted_data = OrderedDict(sorted(clean_data.items(), key=itemgetter(1), reverse=True))
+
                 with open("./cache/" + file_name, "w") as cache_file:
                     cache_file.write(json.dumps(sorted_data))
                 utils.print_success("Saved succesfully to cache directory.")
